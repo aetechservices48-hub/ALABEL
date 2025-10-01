@@ -244,22 +244,38 @@ if ("serviceWorker" in navigator) {
 }
 
 let deferredPrompt;
+let installBtn;
+
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  const btn = document.createElement("button");
-  btn.innerText = "⬇️ Install App";
-  btn.className = "fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg";
-  document.body.appendChild(btn);
-  btn.addEventListener("click", () => {
-    btn.remove();
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(choice => {
-      if (choice.outcome === "accepted") {
-        console.log("App installed!");
-      }
+
+  // Huwag gumawa ng duplicate button
+  if (!installBtn) {
+    installBtn = document.createElement("button");
+    installBtn.innerText = "⬇️ Install App";
+    installBtn.className = "fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg";
+    document.body.appendChild(installBtn);
+
+    installBtn.addEventListener("click", () => {
+      installBtn.remove();
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(choice => {
+        if (choice.outcome === "accepted") {
+          console.log("✅ App installed!");
+        } else {
+          console.log("❌ User dismissed install");
+        }
+      });
     });
-  });
+  }
+});
+
+// ✅ kapag installed na, alisin na ang button
+window.addEventListener("appinstalled", () => {
+  console.log("🎉 PWA installed!");
+  if (installBtn) installBtn.remove();
+  deferredPrompt = null;
 });
 </script>
 </body>

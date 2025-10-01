@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MikroTik Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .card { background:#fff; border-radius:14px; box-shadow:0 6px 18px rgba(0,0,0,.06); }
+    .btn { padding:.5rem 1rem; border-radius:.6rem; font-weight:600; }
+    .btn.active { background:#111827; color:#fff; }
+    .btn:not(.active){ background:#e5e7eb; color:#111827; }
+    .server-card:hover{ transform: translateY(-2px); transition:.2s; }
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: 400px; /* adjust ayon sa taas ng 10 rows */
+      -webkit-overflow-scrolling: touch;
+      border: 1px solid #ddd;
+      border-radius: 0.5rem;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 0.5rem; border-bottom: 1px solid #ddd; text-align: left; }
+    thead { background: #f9fafb; position: sticky; top: 0; }
+	.table-container {
+  width: 100%;
+  max-height: 400px;       /* vertical scroll kung >10 rows */
+  overflow-y: auto;        /* vertical scroll */
+  overflow-x: auto;        /* horizontal scroll sa phone */
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #ddd;
+  border-radius: 0.5rem;
+}
+table {
+  min-width: 600px;        /* ✅ para hindi mag-compress sa maliit na screen */
+  width: 100%;
+  border-collapse: collapse;
+}
+
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+<header class="bg-slate-800 text-white py-4 px-5">
+    <h1 class="text-xl md:text-2xl font-bold" >📊 Server Income Dashboard</h1>
+  </header>
+<main class="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+
+  <!-- GLOBAL: Totals -->
+  <section id="globalSection" class="space-y-4">
+    <div id="totalsSection" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="card p-5 text-center">
+        <div class="text-gray-500 font-semibold">Today</div>
+        <div id="globalToday" class="text-3xl font-extrabold">0</div>
+      </div>
+      <div class="card p-5 text-center">
+        <div class="text-gray-500 font-semibold">This Month</div>
+        <div id="globalMonth" class="text-3xl font-extrabold">0</div>
+      </div>
+      <div class="card p-5 text-center">
+        <div class="text-gray-500 font-semibold">This Year</div>
+        <div id="globalYear" class="text-3xl font-extrabold">0</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Server List -->
+  <section id="serverList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></section>
+
+  <!-- SERVER DETAIL -->
+  <section id="serverSection" class="hidden space-y-4">
+    <div class="flex items-center justify-between">
+      <h2 id="serverTitle" class="text-xl font-bold">Server: -</h2>
+      <button class="btn bg-gray-700 text-white" onclick="backToDashboard()">← Back</button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="card p-5 text-center">
+        <div class="text-gray-500 font-semibold">Today Income</div>
+        <div id="serverToday" class="text-3xl font-extrabold">0</div>
+      </div>
+      <div class="card p-5 text-center">
+        <div class="text-gray-500 font-semibold">This Month</div>
+        <div id="serverMonth" class="text-3xl font-extrabold">0</div>
+      </div>
+      <div class="card p-5 text-center">
+        <div class="text-gray-500 font-semibold">This Year</div>
+        <div id="serverYear" class="text-3xl font-extrabold">0</div>
+      </div>
+    </div>
+
+    <div class="card p-4">
+      <label class="font-semibold">Select Date</label>
+      <input id="datePicker" type="date" class="mt-1 p-2 border rounded" />
+      <p id="selectedIncome" class="mt-3 text-lg font-bold"></p>
+    </div>
+
+    <div class="card p-4">
+      <h3 class="font-semibold mb-2">Customers (Selected Date)</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>MAC</th>
+              <th>Date</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody id="serverTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Loader overlay -->
+<div id="loader" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+  <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-white"></div>
+</div>
+
+<script>
+const sheetUrl = "https://script.google.com/macros/s/AKfycby8sQe6-GF8NCVOOeAp932EGJPU_Gr6isCfc3RkJwsfi4FQQu8-dCYDrh4M3aq0H0M/exec"; 
+let allData = {};
+let currentServer = null;
+
+const toNumber = v => Number(v ?? 0);
+
+// Local-date function (no UTC)
+function ymd(d){
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function parseDateFlexible(s) { 
+  if(typeof s!=='string') return new Date(s); 
+  if(s.includes('T')) return new Date(s); 
+  return new Date(s.replace(' ','T')); 
+}
+
+function fmtMoney(n){ return new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',maximumFractionDigits:0}).format(n||0); }
+
+// ===================== FETCH DATA =====================
+async function fetchData(showLoader = true){
+  const loader = document.getElementById('loader');
+  if(showLoader) loader.style.display = "flex";
+  try {
+    const res = await fetch(sheetUrl);
+    if(!res.ok) throw new Error("HTTP error " + res.status);
+    allData = await res.json();
+    renderServers();
+    computeGlobalTotals();
+    if(currentServer){
+      const dp = document.getElementById('datePicker');
+      openServer(currentServer, dp.value); // preserve selected date
+    }
+  } catch(e){
+    console.error("Load failed:", e);
+  } finally {
+    if(showLoader) loader.style.display = "none";
+  }
+}
+
+// ===================== GLOBAL TOTALS =====================
+function computeGlobalTotals(){
+  let tToday=0,tMonth=0,tYear=0;
+  const now=new Date(), todayStr=ymd(now), m=now.getMonth(), y=now.getFullYear();
+  for(const server in allData){
+    if(server.toLowerCase() === "sheet1") continue; // 🚫 skip Sheet1
+    (allData[server]||[]).forEach(r=>{
+      const d=parseDateFlexible(r.TimeLogin), amt=toNumber(r.Amount);
+      if(ymd(d)===todayStr) tToday+=amt;
+      if(d.getFullYear()===y && d.getMonth()===m) tMonth+=amt;
+      if(d.getFullYear()===y) tYear+=amt;
+    });
+  }
+  document.getElementById('globalToday').textContent = fmtMoney(tToday);
+  document.getElementById('globalMonth').textContent = fmtMoney(tMonth);
+  document.getElementById('globalYear').textContent = fmtMoney(tYear);
+}
+
+// ===================== SERVER LIST =====================
+function renderServers(){
+  const wrap=document.getElementById('serverList'); 
+  wrap.innerHTML='';
+
+  const now = new Date();
+  const todayStr = ymd(now);
+
+  for(const srv in allData){
+    if(srv.toLowerCase() === "sheet1") continue; // 🚫 skip Sheet1
+
+    let tToday = 0;
+    (allData[srv]||[]).forEach(r=>{
+      const d = parseDateFlexible(r.TimeLogin);
+      if(ymd(d) === todayStr) tToday += toNumber(r.Amount);
+    });
+
+    const div=document.createElement('div');
+    div.className='card p-5 server-card cursor-pointer';
+    div.innerHTML=`
+      <div class="flex justify-between items-center">
+        <div class="text-lg font-bold">${srv}</div>
+        <div class="text-sm font-semibold text-gray-700">Today: ${fmtMoney(tToday)}</div>
+      </div>
+      <div class="text-gray-500 text-sm mt-1">Click to view details</div>
+    `;
+    div.onclick=()=>openServer(srv); 
+    wrap.appendChild(div);
+  }
+}
+
+
+// ===================== SERVER DETAIL =====================
+function openServer(srv, selectedDate=null){
+  currentServer=srv;
+  document.getElementById('globalSection').classList.add('hidden');
+  document.getElementById('serverList').classList.add('hidden');
+  document.getElementById('serverSection').classList.remove('hidden');
+  document.getElementById('serverTitle').textContent=`Server: ${srv}`;
+
+  const txs=allData[srv]||[]; 
+  let tToday=0,tMonth=0,tYear=0;
+  const now=new Date(), todayStr=ymd(now), m=now.getMonth(), y=now.getFullYear();
+  txs.forEach(r=>{ 
+    const d=parseDateFlexible(r.TimeLogin), amt=toNumber(r.Amount);
+    if(ymd(d)===todayStr) tToday+=amt;
+    if(d.getFullYear()===y && d.getMonth()===m) tMonth+=amt;
+    if(d.getFullYear()===y) tYear+=amt;
+  });
+
+  document.getElementById('serverToday').textContent=fmtMoney(tToday);
+  document.getElementById('serverMonth').textContent=fmtMoney(tMonth);
+  document.getElementById('serverYear').textContent=fmtMoney(tYear);
+
+  const dp=document.getElementById('datePicker');
+  const todayISO = ymd(now);
+  dp.max = todayISO;
+
+  const dateToUse = selectedDate || todayISO;
+  dp.value = dateToUse;
+
+  renderServerTableForDate(txs, dateToUse, true);
+
+  dp.onchange = () => {
+    const sel = dp.value;
+    renderServerTableForDate(txs, sel, sel !== todayISO);
+  };
+}
+
+function renderServerTableForDate(txs, ymdStr, showIncomeText){
+  const tbody=document.getElementById('serverTbody'); 
+  tbody.innerHTML=''; 
+  let sum=0;
+  txs.forEach(r=>{ 
+    const d=parseDateFlexible(r.TimeLogin); 
+    if(ymd(d)===ymdStr){
+      sum+=toNumber(r.Amount);
+      const human=d.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
+      tbody.innerHTML+=`<tr><td>${r.User}</td><td>${r.MAC}</td><td>${human}</td><td>${fmtMoney(r.Amount)}</td></tr>`;
+    }
+  });
+  document.getElementById('selectedIncome').textContent=showIncomeText?`Income on Selected Date: ${fmtMoney(sum)}`:'';
+
+  // Auto-scroll kapag higit sa 10 rows
+  const tableContainer = document.querySelector('.table-container');
+  if(tbody.rows.length > 10){
+    tableContainer.scrollTop = 0; 
+  }
+}
+
+function backToDashboard(){
+  currentServer=null;
+  document.getElementById('serverSection').classList.add('hidden');
+  document.getElementById('globalSection').classList.remove('hidden');
+  document.getElementById('serverList').classList.remove('hidden');
+}
+
+// ===================== INITIAL LOAD =====================
+fetchData(true); // loader shown
+setInterval(() => fetchData(false), 300); // ✅ auto-refresh every 30s
+</script>
+</body>
+</html>

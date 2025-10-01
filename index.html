@@ -7,9 +7,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- ✅ PWA Support -->
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#111827">
-  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="./icon-192.png">
 
   <style>
     .card { background:#fff; border-radius:14px; box-shadow:0 6px 18px rgba(0,0,0,.06); }
@@ -239,7 +239,7 @@ setInterval(() => fetchData(false), 30000); // 30s refresh
 
 // ✅ PWA install button
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("service-worker.js")
+  navigator.serviceWorker.register("./service-worker.js")
     .then(() => console.log("Service Worker Registered"));
 }
 
@@ -250,7 +250,6 @@ window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   deferredPrompt = e;
 
-  // Huwag gumawa ng duplicate button
   if (!installBtn) {
     installBtn = document.createElement("button");
     installBtn.innerText = "⬇️ Install App";
@@ -263,17 +262,14 @@ window.addEventListener("beforeinstallprompt", (e) => {
       deferredPrompt.userChoice.then(choice => {
         if (choice.outcome === "accepted") {
           console.log("✅ App installed!");
-        } else {
-          console.log("❌ User dismissed install");
         }
       });
     });
   }
 });
 
-// ✅ kapag installed na, alisin na ang button
 window.addEventListener("appinstalled", () => {
-  console.log("🎉 PWA installed!");
+  console.log("PWA installed!");
   if (installBtn) installBtn.remove();
   deferredPrompt = null;
 });
